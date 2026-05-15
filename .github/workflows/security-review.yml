@@ -1,0 +1,28 @@
+name: Security Review
+
+on:
+  pull_request:
+    paths:
+      - '**.tf'
+      - '**.yml'
+      - '**.yaml'
+      - '**.py'
+      - '**.sh'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  security-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: claudeaiportfolio/claude-security-review/action@main
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fail-on-warning: "false"
