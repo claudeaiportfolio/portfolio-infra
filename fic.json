@@ -1,0 +1,10 @@
+{
+  "name": "claudeaiportfolio-all-repos",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "audiences": ["api://AzureADTokenExchange"],
+  "subject": null,
+  "claimsMatchingExpression": {
+    "value": "claims['sub'] matches 'repo:claudeaiportfolio/*'",
+    "languageVersion": 1
+  }
+}
