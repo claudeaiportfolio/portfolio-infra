@@ -48,5 +48,13 @@ resource "auth0_client_credentials" "clients" {
   for_each = var.auth0_clients
 
   client_id             = auth0_client.clients[each.key].id
-  authentication_method = "none"
+  authentication_method = each.value.authentication_method
+}
+
+resource "auth0_client_grant" "m2m" {
+  for_each = { for k, v in var.auth0_clients : k => v if v.api_identifier != null }
+
+  client_id = auth0_client.clients[each.key].id
+  audience  = each.value.api_identifier
+  scopes    = each.value.api_scopes
 }
