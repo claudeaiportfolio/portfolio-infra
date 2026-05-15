@@ -23,3 +23,8 @@ variable "auth0_clients" {
   }))
   default = {}
 }
+
+variable "key_vault_id" {
+  description = "Azure Key Vault resource ID to write Auth0 client credentials into."
+  type        = string
+}
