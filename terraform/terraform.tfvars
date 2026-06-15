@@ -7,8 +7,12 @@ auth0_apis = {
     }
   }
   "https://rag.dev.michaelalinks.com" = {
-    name   = "RAG MCP"
-    scopes = {}
+    name = "RAG MCP"
+    scopes = {
+      "ingest:write"  = "Queue a document for embedding + indexing"
+      "query:read"    = "Search the indexed corpus and read grounded answers"
+      "admin:reindex" = "Force a re-embed of the entire corpus or a tenant"
+    }
   }
   "https://azure.dev.michaelalinks.com" = {
     name   = "Azure Resource Graph MCP"
