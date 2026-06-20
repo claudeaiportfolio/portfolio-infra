@@ -13,23 +13,31 @@ auth0_apis = {
     }
   }
 
-  # Follow-up: these are currently owned by snowflake-forecasting's own state.
-  # Centralise them here (import + state-rm from that repo) to fully realise the
-  # "shared APIs central, clients local" model. Left commented so this root's
-  # apply doesn't collide with the already-live snowflake-owned resources.
-  # "https://snowflake.dev.michaelalinks.com" = {
-  #   name = "Loan Portfolio MCP"
-  #   scopes = {
-  #     "read:forecasts" = "Read loan forecast data"
-  #     "read:audit"     = "Read audit log entries"
-  #   }
-  # }
+  "https://snowflake.dev.michaelalinks.com" = {
+    name = "Loan Portfolio MCP"
+    scopes = {
+      "read:forecasts" = "Read loan forecast data"
+      "read:audit"     = "Read audit log entries"
+    }
+  }
+
+  # Follow-up: the azure API ("Azure Resource Graph MCP") isn't live anywhere
+  # yet; add it here when a solution actually needs it.
   # "https://azure.dev.michaelalinks.com" = {
   #   name   = "Azure Resource Graph MCP"
   #   scopes = {}
   # }
 }
 
-# M2M / interactive clients are provisioned locally per solution, not here.
-# (The interactive `mcp-client` is owned by snowflake-forecasting's state.)
-auth0_clients = {}
+# Shared interactive client (used across solutions, e.g. claude.ai connecting to
+# the MCP servers) is owned centrally. Solution-specific M2M clients stay LOCAL
+# in their repos (rag-m2m in rag-ingestion-platform, snowflake-subagent in
+# snowflake-forecasting).
+auth0_clients = {
+  "mcp-client" = {
+    name        = "MCP Client"
+    app_type    = "native"
+    callbacks   = ["http://localhost:3000/callback", "https://claude.ai/api/mcp/auth_callback"]
+    logout_urls = ["http://localhost:3000"]
+  }
+}
