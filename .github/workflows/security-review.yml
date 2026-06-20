@@ -1,13 +1,16 @@
 name: Security Review
 
+# Two-layer gate via the shared org action: deterministic gitleaks secret scan
+# on every push/PR, plus the advisory Claude diff review on PRs.
+#
+# NB: the previous `claudeaiportfolio/claude-security-review/action@main` ref
+# pointed at a repo that doesn't exist — the canonical action lives in
+# ai-infra-templates. No path filter, so the secret gate runs on every change.
+
 on:
   pull_request:
-    paths:
-      - '**.tf'
-      - '**.yml'
-      - '**.yaml'
-      - '**.py'
-      - '**.sh'
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -21,7 +24,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: claudeaiportfolio/claude-security-review/action@main
+      - uses: claudeaiportfolio/ai-infra-templates/action@main
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
