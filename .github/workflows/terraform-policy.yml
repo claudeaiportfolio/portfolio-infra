@@ -1,0 +1,111 @@
+name: Terraform Policy Gate
+
+# Blocking IaC gate on every PR and push:
+#   1. terraform fmt -check + validate (per module / example / root)
+#   2. checkov  (static security scan of the Terraform)
+#   3. custom policy (no-identifying-literals + anti-facade)
+#   4. terraform test (native *.tftest.hcl, provider mocked — no live Azure)
+# None of these touch live infrastructure: validate/test use -backend=false /
+# mocked providers, and there is no `terraform apply` anywhere in CI.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  TF_VERSION: "1.9.8"
+
+jobs:
+  fmt:
+    name: fmt-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - run: terraform fmt -check -recursive
+
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - terraform
+          - terraform/modules/postgres
+          - terraform/modules/identity
+          - terraform/modules/storage
+          - terraform/modules/openai
+          - terraform/modules/aks-nodepool
+          - terraform/modules/auth0
+          - examples/postgres
+          - examples/identity
+          - examples/storage
+          - examples/openai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: init + validate
+        working-directory: ${{ matrix.dir }}
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+  custom-policy:
+    name: custom-policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: no-identifying-literals + anti-facade
+        run: python3 policy/policy_check.py terraform/modules
+
+  # checkov runs ADVISORY (soft_fail) — it surfaces generic Azure hardening
+  # findings (CMK, logging, network ACLs) that are deliberately out of scope
+  # for this interface release. The BLOCKING gate is fmt + validate +
+  # custom-policy + terraform-test. Flip soft_fail to false once the module
+  # baseline has been triaged against checkov's Azure ruleset.
+  checkov:
+    name: checkov (advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform
+          framework: terraform
+          quiet: true
+          soft_fail: true
+
+  tftest:
+    name: terraform-test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - postgres
+          - identity
+          - storage
+          - openai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: terraform test (${{ matrix.module }})
+        working-directory: terraform/modules/${{ matrix.module }}
+        run: |
+          terraform init -backend=false
+          terraform test

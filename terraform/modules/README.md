@@ -9,13 +9,26 @@ git-subdirectory source pinned to a tag, rather than copying modules per repo
 
 ```hcl
 module "postgres" {
-  source = "git::https://github.com/claudeaiportfolio/portfolio-infra.git//terraform/modules/postgres?ref=tf-modules-v0.1.0"
-  # ...inputs
+  source = "git::https://github.com/claudeaiportfolio/portfolio-infra.git//terraform/modules/postgres?ref=tf-modules-v0.2.0"
+
+  # v0.2.0: solution-specific values are REQUIRED inputs, not module defaults.
+  database_name     = "myapp"
+  server_extensions = ["VECTOR"] # opt-in; default [] leaves the server stock
+
+  # Real private endpoint (no facade): wire to the shared network outputs.
+  enable_private_endpoints   = true
+  private_endpoint_subnet_id = module.shared_network.private_endpoint_subnet_id
+  private_dns_zone_id        = module.shared_network.private_dns_zone_ids["postgres"]
+  # ...remaining inputs
 }
 ```
 
 Only the **invocation** (wiring + tfvars) lives in the consuming repo; the
-module definition lives here.
+module definition lives here. See `../../examples/` for full neutral-value
+invocations of each changed module, and `../../CHANGELOG.md` for the v0.2.0
+breaking interface changes (required `database_name`, map-based identity
+`workloads`, parameterised storage containers/roles/lifecycle, the
+`openai_user_principal_ids` set, and real private endpoints).
 
 ## Modules
 
