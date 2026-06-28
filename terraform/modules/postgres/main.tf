@@ -93,23 +93,26 @@ resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure" {
   end_ip_address   = "0.0.0.0"
 }
 
-# AKS pods reach Postgres via the public hostname too — Microsoft Azure
-# egress IPs are not predictable per region without VNet integration, so
-# AllowAzureServices is required for both the GitHub runner and the
-# cluster. Tightened to a private endpoint by flipping
-# var.enable_private_endpoints (handoff stage 9).
+# When public access is enabled, callers without predictable egress IPs (CI
+# runners, AKS pods without VNet integration) reach Postgres via the public
+# hostname, so AllowAzureServices is required. When enable_private_endpoints
+# is set, public access is disabled and traffic flows through the private
+# endpoint created below.
 
+# Extension allowlist (azure.extensions). Only created when the caller asks
+# for extensions — neutral empty default leaves the server stock.
 resource "azurerm_postgresql_flexible_server_configuration" "extensions" {
+  count     = length(var.server_extensions) > 0 ? 1 : 0
   name      = "azure.extensions"
   server_id = azurerm_postgresql_flexible_server.primary.id
-  value     = "VECTOR"
+  value     = join(",", var.server_extensions)
 }
 
-resource "azurerm_postgresql_flexible_server_database" "rag" {
-  name      = "rag"
+resource "azurerm_postgresql_flexible_server_database" "this" {
+  name      = var.database_name
   server_id = azurerm_postgresql_flexible_server.primary.id
-  charset   = "UTF8"
-  collation = "en_US.utf8"
+  charset   = var.database_charset
+  collation = var.database_collation
 }
 
 resource "azurerm_postgresql_flexible_server" "replica" {
@@ -129,8 +132,8 @@ resource "azurerm_postgresql_flexible_server" "replica" {
   }
 }
 
-# Replica needs the same auth + firewall posture as primary — retrieval-api
-# pods connect to it via PG_REPLICA_HOST using their workload-identity token.
+# Replica needs the same auth + firewall posture as primary — read-only
+# consumers connect to it using their workload-identity token.
 resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure_replica" {
   name             = "AllowAzureServices"
   server_id        = azurerm_postgresql_flexible_server.replica.id
@@ -143,3 +146,68 @@ resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure_replica
 # do not create them as separate TF resources or apply will fail with
 # "already exists". Firewall rules do NOT replicate, which is why the
 # replica firewall above is still explicit.
+
+# --- Real private networking (v0.2.0) -------------------------------------
+# Previously enable_private_endpoints ONLY flipped public_network_access_enabled
+# (a facade — no endpoint or DNS was created). It now provisions real private
+# endpoints + DNS wiring, with VNet/subnet/DNS-zone IDs passed as parameters.
+
+resource "azurerm_private_endpoint" "primary" {
+  count = var.enable_private_endpoints ? 1 : 0
+
+  name                = "${azurerm_postgresql_flexible_server.primary.name}-pe"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  subnet_id           = var.private_endpoint_subnet_id
+
+  private_service_connection {
+    name                           = "${azurerm_postgresql_flexible_server.primary.name}-psc"
+    private_connection_resource_id = azurerm_postgresql_flexible_server.primary.id
+    subresource_names              = ["postgresqlServer"]
+    is_manual_connection           = false
+  }
+
+  dynamic "private_dns_zone_group" {
+    for_each = var.private_dns_zone_id == "" ? [] : [var.private_dns_zone_id]
+    content {
+      name                 = "default"
+      private_dns_zone_ids = [private_dns_zone_group.value]
+    }
+  }
+
+  tags = var.tags
+
+  # Fail fast if the flag is set without a subnet to land the endpoint NIC in.
+  lifecycle {
+    precondition {
+      condition     = var.private_endpoint_subnet_id != ""
+      error_message = "enable_private_endpoints = true requires private_endpoint_subnet_id to be set."
+    }
+  }
+}
+
+resource "azurerm_private_endpoint" "replica" {
+  count = var.enable_private_endpoints ? 1 : 0
+
+  name                = "${azurerm_postgresql_flexible_server.replica.name}-pe"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  subnet_id           = var.private_endpoint_subnet_id
+
+  private_service_connection {
+    name                           = "${azurerm_postgresql_flexible_server.replica.name}-psc"
+    private_connection_resource_id = azurerm_postgresql_flexible_server.replica.id
+    subresource_names              = ["postgresqlServer"]
+    is_manual_connection           = false
+  }
+
+  dynamic "private_dns_zone_group" {
+    for_each = var.private_dns_zone_id == "" ? [] : [var.private_dns_zone_id]
+    content {
+      name                 = "default"
+      private_dns_zone_ids = [private_dns_zone_group.value]
+    }
+  }
+
+  tags = var.tags
+}

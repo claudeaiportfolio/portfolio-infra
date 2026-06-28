@@ -8,42 +8,37 @@ terraform {
 }
 
 locals {
-  # Each workload: UAMI name, k8s namespace, k8s service-account name.
-  workloads = {
-    upload_api = {
-      name      = "${var.name_prefix}-upload-api-${var.loc_short}"
-      namespace = "ingestion"
-      sa_name   = "upload-api"
-    }
-    embedding_worker = {
-      name      = "${var.name_prefix}-embedding-worker-${var.loc_short}"
-      namespace = "ingestion"
-      sa_name   = "embedding-worker"
-    }
-    retrieval_api = {
-      name      = "${var.name_prefix}-retrieval-api-${var.loc_short}"
-      namespace = "query"
-      sa_name   = "retrieval-api"
-    }
-    mcp_server = {
-      name      = "${var.name_prefix}-mcp-server-${var.loc_short}"
-      namespace = "query"
-      sa_name   = "mcp-server"
-    }
+  # Derive a UAMI name from the caller's logical key — no solution-specific
+  # names baked into the module.
+  workload_names = {
+    for k, w in var.workloads :
+    k => "${var.name_prefix}-${replace(k, "_", "-")}-${var.loc_short}"
   }
+
+  # Flatten any per-workload extra federated subjects into a single map keyed
+  # by "<workload>.<label>" so each becomes its own federated credential.
+  extra_federations = merge([
+    for k, w in var.workloads : {
+      for label, subject in w.extra_federated_subjects :
+      "${k}.${label}" => {
+        workload = k
+        subject  = subject
+      }
+    }
+  ]...)
 }
 
 resource "azurerm_user_assigned_identity" "this" {
-  for_each            = local.workloads
-  name                = each.value.name
+  for_each            = var.workloads
+  name                = local.workload_names[each.key]
   resource_group_name = var.resource_group_name
   location            = var.location
   tags                = var.tags
 }
 
 resource "azurerm_federated_identity_credential" "this" {
-  for_each  = local.workloads
-  name      = "${each.value.name}-fed"
+  for_each  = var.workloads
+  name      = "${local.workload_names[each.key]}-fed"
   parent_id = azurerm_user_assigned_identity.this[each.key].id
 
   audience = ["api://AzureADTokenExchange"]
@@ -51,15 +46,15 @@ resource "azurerm_federated_identity_credential" "this" {
   subject  = "system:serviceaccount:${each.value.namespace}:${each.value.sa_name}"
 }
 
-# KEDA's azure-servicebus scaler authenticates as the keda-operator pod's
-# workload identity. We federate the embedding-worker UAMI to the
-# keda-operator ServiceAccount so KEDA can query queue depth with the same
-# identity the worker uses, without provisioning a dedicated UAMI for KEDA.
-resource "azurerm_federated_identity_credential" "keda_operator" {
-  name      = "${local.workloads.embedding_worker.name}-keda-operator-fed"
-  parent_id = azurerm_user_assigned_identity.this["embedding_worker"].id
+# Additional federations for a workload's UAMI (generalised form of the old
+# KEDA-operator special case). E.g. an autoscaler operator pod authenticating
+# with a worker's identity to read queue depth.
+resource "azurerm_federated_identity_credential" "extra" {
+  for_each  = local.extra_federations
+  name      = "${local.workload_names[each.value.workload]}-${replace(each.key, ".", "-")}-fed"
+  parent_id = azurerm_user_assigned_identity.this[each.value.workload].id
 
   audience = ["api://AzureADTokenExchange"]
   issuer   = var.oidc_issuer_url
-  subject  = "system:serviceaccount:keda:keda-operator"
+  subject  = each.value.subject
 }

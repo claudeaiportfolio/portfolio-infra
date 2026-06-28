@@ -23,3 +23,54 @@ variable "auth0_clients" {
   }))
   default = {}
 }
+
+# --- Shared networking (B2) -----------------------------------------------
+# Neutral defaults; no identifying values. Override via a git-ignored tfvars
+# at apply time.
+variable "location" {
+  description = "Azure region for the shared network resources."
+  type        = string
+  default     = "eastus"
+}
+
+variable "name_prefix" {
+  description = "Short prefix used to name shared resources."
+  type        = string
+  default     = "portfolio"
+}
+
+variable "loc_short" {
+  description = "Short region token used in resource names."
+  type        = string
+  default     = "eus"
+}
+
+variable "shared_network_resource_group_name" {
+  description = "Resource group for the shared VNet + private DNS zones."
+  type        = string
+  default     = "portfolio-shared-network-rg"
+}
+
+variable "vnet_address_space" {
+  description = "Address space for the shared VNet."
+  type        = list(string)
+  default     = ["10.50.0.0/16"]
+}
+
+variable "aca_subnet_prefixes" {
+  description = "Address prefixes for the Container Apps delegated subnet (needs at least /23)."
+  type        = list(string)
+  default     = ["10.50.0.0/23"]
+}
+
+variable "private_endpoint_subnet_prefixes" {
+  description = "Address prefixes for the private endpoint subnet."
+  type        = list(string)
+  default     = ["10.50.2.0/24"]
+}
+
+variable "tags" {
+  description = "Tags applied to shared network resources."
+  type        = map(string)
+  default     = {}
+}

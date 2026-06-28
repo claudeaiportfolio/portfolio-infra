@@ -64,14 +64,45 @@ resource "azurerm_cognitive_deployment" "chat" {
   }
 }
 
-resource "azurerm_role_assignment" "worker_aoai_user" {
+resource "azurerm_role_assignment" "openai_user" {
+  for_each             = var.openai_user_principal_ids
   scope                = azurerm_cognitive_account.this.id
   role_definition_name = "Cognitive Services OpenAI User"
-  principal_id         = var.worker_principal_id
+  principal_id         = each.value
 }
 
-resource "azurerm_role_assignment" "retrieval_aoai_user" {
-  scope                = azurerm_cognitive_account.this.id
-  role_definition_name = "Cognitive Services OpenAI User"
-  principal_id         = var.retrieval_principal_id
+# --- Real private networking (v0.2.0) -------------------------------------
+# Previously enable_private_endpoints ONLY flipped public_network_access_enabled
+# (a facade). It now provisions a real private endpoint + DNS wiring.
+resource "azurerm_private_endpoint" "account" {
+  count = var.enable_private_endpoints ? 1 : 0
+
+  name                = "${azurerm_cognitive_account.this.name}-pe"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  subnet_id           = var.private_endpoint_subnet_id
+
+  private_service_connection {
+    name                           = "${azurerm_cognitive_account.this.name}-psc"
+    private_connection_resource_id = azurerm_cognitive_account.this.id
+    subresource_names              = ["account"]
+    is_manual_connection           = false
+  }
+
+  dynamic "private_dns_zone_group" {
+    for_each = var.private_dns_zone_id == "" ? [] : [var.private_dns_zone_id]
+    content {
+      name                 = "default"
+      private_dns_zone_ids = [private_dns_zone_group.value]
+    }
+  }
+
+  tags = var.tags
+
+  lifecycle {
+    precondition {
+      condition     = var.private_endpoint_subnet_id != ""
+      error_message = "enable_private_endpoints = true requires private_endpoint_subnet_id to be set."
+    }
+  }
 }
