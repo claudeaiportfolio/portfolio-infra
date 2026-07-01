@@ -3,6 +3,36 @@
 All notable changes to the shared Terraform modules. Tags follow
 `tf-modules-vX.Y.Z`. Consumers pin to a tag and re-pin on their own clock.
 
+## tf-modules-v0.3.0 (unreleased)
+
+Additive release: new **`aca`** module (Azure Container Apps). No changes to
+existing modules — consumers on `tf-modules-v0.2.0` are unaffected and re-pin
+only to adopt `aca`.
+
+### Added
+
+- **`aca`** — Azure **Container App** + **Container App Environment**, shaped
+  for the portfolio and fully parameterised (no solution/identifying literals):
+  - Environment: VNet integration via `infrastructure_subnet_id` (delegated to
+    `Microsoft.App/environments`), `internal_ingress_only` (internal load
+    balancer, no public ingress), optional Log Analytics, optional zone
+    redundancy, opt-in `workload_profiles` (empty => Consumption-only, which
+    still supports VNet + scale-to-zero). A precondition fails fast if
+    internal/zone-redundant is requested without a subnet.
+  - Container App: image + `cpu`/`memory` params, **scale-to-zero** by default
+    (`min_replicas = 0`) with optional `custom_scale_rules` (KEDA), plain
+    `env_vars` + Key Vault-backed `secret_env_vars`, and **all** secret /
+    registry (ACR) auth via a caller-owned **user-assigned managed identity**
+    (`user_assigned_identity_id`) — no admin users or stored passwords. Ingress
+    is off by default and internal-only when enabled.
+  - Does **not** declare `enable_private_endpoints`: Container Apps use VNet
+    integration + an internal LB rather than a private endpoint, so the
+    `anti-facade` rule does not apply (it governs only modules exposing that
+    flag). The caller creates the UAMI and grants `AcrPull` + `Key Vault
+    Secrets User`, keeping those identifying scopes out of the module body.
+  - `examples/aca` (validate-only) + `tests/aca.tftest.hcl` (mocked provider,
+    plan-only). Added to the policy-gate `validate` + `terraform-test` matrices.
+
 ## tf-modules-v0.2.0 (unreleased)
 
 Interface release: removed all solution-coupled literals from module bodies,

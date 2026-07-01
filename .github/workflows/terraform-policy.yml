@@ -44,10 +44,12 @@ jobs:
           - terraform/modules/openai
           - terraform/modules/aks-nodepool
           - terraform/modules/auth0
+          - terraform/modules/aca
           - examples/postgres
           - examples/identity
           - examples/storage
           - examples/openai
+          - examples/aca
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -99,6 +101,7 @@ jobs:
           - identity
           - storage
           - openai
+          - aca
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
