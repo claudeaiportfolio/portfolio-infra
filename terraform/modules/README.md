@@ -40,6 +40,7 @@ breaking interface changes (required `database_name`, map-based identity
 | `postgres` | Postgres flexible server (+ replica) with Entra admin registration |
 | `openai` | Azure OpenAI account + model deployments + role assignments |
 | `aks-nodepool` | Spot user node pool attached to a shared AKS cluster |
+| `aca` | Azure Container Apps + Environment — a Container **App** or a run-to-completion **Job** (`workload_kind`); VNet-integrated, internal-only, KV secrets + ACR pull via a user-assigned identity |
 
 ## Versioning
 
