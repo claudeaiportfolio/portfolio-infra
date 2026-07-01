@@ -3,6 +3,21 @@ variable "location" { type = string }
 variable "name_prefix" { type = string }
 variable "loc_short" { type = string }
 
+# --- Workload kind: a long-running Container App OR an on-demand Job ---
+# Both run in the same Container App Environment and share the identity /
+# registry / secret / env wiring. Pick "app" for a service (ingress, scaling)
+# or "job" for an episodic/batch run-to-completion workload.
+variable "workload_kind" {
+  description = "Which compute primitive to create: 'app' (azurerm_container_app) or 'job' (azurerm_container_app_job)."
+  type        = string
+  default     = "app"
+
+  validation {
+    condition     = contains(["app", "job"], var.workload_kind)
+    error_message = "workload_kind must be 'app' or 'job'."
+  }
+}
+
 # --- Naming (derived from name_prefix/loc_short, overridable) ---
 variable "environment_name" {
   description = "Container App Environment name. Empty => derived '<name_prefix>-aca-env-<loc_short>'."
@@ -11,13 +26,13 @@ variable "environment_name" {
 }
 
 variable "app_name" {
-  description = "Container App name. Empty => derived '<name_prefix>-app-<loc_short>'."
+  description = "Container App / Job name. Empty => derived '<name_prefix>-app-<loc_short>' (app) or '<name_prefix>-job-<loc_short>' (job)."
   type        = string
   default     = ""
 }
 
 variable "container_name" {
-  description = "Name of the single container in the app template. Empty => derived '<name_prefix>-app'."
+  description = "Name of the single container in the template. Empty => derived '<name_prefix>-app'."
   type        = string
   default     = ""
 }
@@ -105,7 +120,36 @@ variable "custom_scale_rules" {
   default = []
 }
 
-# --- Ingress (disabled by default; internal-only when enabled) ---
+# --- Job trigger (workload_kind = "job") ---
+# Only a MANUAL (on-demand) trigger is modelled: the operator starts an
+# execution when needed (a batch/episodic run-to-completion). Schedule/event
+# triggers are out of scope for this release — add them here when a consumer
+# needs cron/queue-driven jobs.
+variable "job_replica_timeout_in_seconds" {
+  description = "Max time (s) a job replica may run before being terminated."
+  type        = number
+  default     = 1800
+}
+
+variable "job_replica_retry_limit" {
+  description = "Retries for a failed job replica."
+  type        = number
+  default     = 1
+}
+
+variable "job_parallelism" {
+  description = "Number of replicas to run in parallel per manual execution."
+  type        = number
+  default     = 1
+}
+
+variable "job_replica_completion_count" {
+  description = "Number of replicas that must complete successfully for an execution to succeed."
+  type        = number
+  default     = 1
+}
+
+# --- Ingress (disabled by default; internal-only when enabled) — app only ---
 variable "ingress_enabled" {
   description = "Whether the app exposes HTTP ingress at all. Default false — an episodic agent needs no inbound listener."
   type        = bool

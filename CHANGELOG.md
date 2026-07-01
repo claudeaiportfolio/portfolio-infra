@@ -11,27 +11,37 @@ only to adopt `aca`.
 
 ### Added
 
-- **`aca`** — Azure **Container App** + **Container App Environment**, shaped
-  for the portfolio and fully parameterised (no solution/identifying literals):
-  - Environment: VNet integration via `infrastructure_subnet_id` (delegated to
-    `Microsoft.App/environments`), `internal_ingress_only` (internal load
-    balancer, no public ingress), optional Log Analytics, optional zone
-    redundancy, opt-in `workload_profiles` (empty => Consumption-only, which
-    still supports VNet + scale-to-zero). A precondition fails fast if
-    internal/zone-redundant is requested without a subnet.
-  - Container App: image + `cpu`/`memory` params, **scale-to-zero** by default
-    (`min_replicas = 0`) with optional `custom_scale_rules` (KEDA), plain
-    `env_vars` + Key Vault-backed `secret_env_vars`, and **all** secret /
-    registry (ACR) auth via a caller-owned **user-assigned managed identity**
-    (`user_assigned_identity_id`) — no admin users or stored passwords. Ingress
-    is off by default and internal-only when enabled.
+- **`aca`** — Azure **Container Apps** on a shared **Container App
+  Environment**, fully parameterised (no solution/identifying literals). One
+  module, **two workload kinds** via `workload_kind`:
+  - `"app"` (default) — a long-running **Container App**: image + `cpu`/`memory`
+    params, **scale-to-zero** (`min_replicas = 0`) with optional
+    `custom_scale_rules` (KEDA), and ingress off by default / internal-only when
+    enabled.
+  - `"job"` — an on-demand **Container App Job** (`azurerm_container_app_job`)
+    for episodic/batch **run-to-completion** work (container runs once + exits).
+    Manual (on-demand) trigger via `manual_trigger_config` (`job_parallelism` /
+    `job_replica_completion_count`) with `job_replica_timeout_in_seconds` /
+    `job_replica_retry_limit`. Start an execution with `az containerapp job
+    start`. (A scale-to-zero App with no ingress would deploy but never wake —
+    the Job is the correct primitive for episodic work and lets an operator
+    actually run + smoke-test it.)
+  - Common to both: the shared **Environment** (VNet integration via
+    `infrastructure_subnet_id` delegated to `Microsoft.App/environments`,
+    `internal_ingress_only` internal LB, optional Log Analytics / zone
+    redundancy / `workload_profiles`; precondition fails fast if
+    internal/zone-redundant without a subnet); plain `env_vars` + Key
+    Vault-backed `secret_env_vars`; and **all** secret / registry (ACR) auth via
+    a caller-owned **user-assigned managed identity** (`user_assigned_identity_id`)
+    — no admin users or stored passwords.
   - Does **not** declare `enable_private_endpoints`: Container Apps use VNet
     integration + an internal LB rather than a private endpoint, so the
     `anti-facade` rule does not apply (it governs only modules exposing that
     flag). The caller creates the UAMI and grants `AcrPull` + `Key Vault
     Secrets User`, keeping those identifying scopes out of the module body.
-  - `examples/aca` (validate-only) + `tests/aca.tftest.hcl` (mocked provider,
-    plan-only). Added to the policy-gate `validate` + `terraform-test` matrices.
+  - `examples/aca` (app + job, validate-only) + `tests/aca.tftest.hcl` (mocked
+    provider, plan-only; app defaults, internal/private app, and job cases).
+    Added to the policy-gate `validate` + `terraform-test` matrices.
 
 ## tf-modules-v0.2.0 (unreleased)
 

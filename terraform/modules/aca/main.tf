@@ -8,17 +8,26 @@ terraform {
 }
 
 locals {
-  environment_name = var.environment_name != "" ? var.environment_name : "${var.name_prefix}-aca-env-${var.loc_short}"
-  app_name         = var.app_name != "" ? var.app_name : "${var.name_prefix}-app-${var.loc_short}"
-  container_name   = var.container_name != "" ? var.container_name : "${var.name_prefix}-app"
+  is_app = var.workload_kind == "app"
+  is_job = var.workload_kind == "job"
+
+  environment_name      = var.environment_name != "" ? var.environment_name : "${var.name_prefix}-aca-env-${var.loc_short}"
+  default_workload_name = local.is_job ? "${var.name_prefix}-job-${var.loc_short}" : "${var.name_prefix}-app-${var.loc_short}"
+  workload_name         = var.app_name != "" ? var.app_name : local.default_workload_name
+  container_name        = var.container_name != "" ? var.container_name : "${var.name_prefix}-app"
 
   # Merge plain env vars and secret-backed env vars into one list the container
   # `env` block iterates. A single source of truth so a new var is added in one
-  # place, never hand-synced across two blocks.
+  # place, never hand-synced across the app and job templates.
   container_env = concat(
     [for k, v in var.env_vars : { name = k, value = v, secret_name = null }],
     [for k, s in var.secret_env_vars : { name = k, value = null, secret_name = s }],
   )
+
+  # Shared secret/registry inputs keyed for the dynamic blocks below. Same data
+  # feeds both the app and the job — the resource-type-specific dynamic block
+  # boilerplate cannot be factored in HCL, but the source of truth is here.
+  secrets_by_name = { for s in var.secrets : s.name => s }
 }
 
 # --- Container App Environment --------------------------------------------
@@ -62,9 +71,11 @@ resource "azurerm_container_app_environment" "this" {
   }
 }
 
-# --- Container App ---------------------------------------------------------
+# --- Container App (workload_kind = "app") ---------------------------------
 resource "azurerm_container_app" "this" {
-  name                         = local.app_name
+  count = local.is_app ? 1 : 0
+
+  name                         = local.workload_name
   container_app_environment_id = azurerm_container_app_environment.this.id
   resource_group_name          = var.resource_group_name
   revision_mode                = "Single"
@@ -88,7 +99,7 @@ resource "azurerm_container_app" "this" {
 
   # Key Vault-backed secrets, resolved at runtime through the UAMI.
   dynamic "secret" {
-    for_each = { for s in var.secrets : s.name => s }
+    for_each = local.secrets_by_name
     content {
       name                = secret.value.name
       key_vault_secret_id = secret.value.key_vault_secret_id
@@ -136,6 +147,72 @@ resource "azurerm_container_app" "this" {
       traffic_weight {
         percentage      = 100
         latest_revision = true
+      }
+    }
+  }
+
+  tags = var.tags
+}
+
+# --- Container App Job (workload_kind = "job") -----------------------------
+# The right primitive for an episodic/batch run-to-completion workload: the
+# container runs the task once and exits (a scale-to-zero App with no ingress
+# would deploy but never wake). Manual (on-demand) trigger — the operator starts
+# an execution when needed. Shares the environment + identity + registry +
+# secret + env wiring with the app path above.
+resource "azurerm_container_app_job" "this" {
+  count = local.is_job ? 1 : 0
+
+  name                         = local.workload_name
+  container_app_environment_id = azurerm_container_app_environment.this.id
+  resource_group_name          = var.resource_group_name
+  location                     = var.location
+  workload_profile_name        = var.workload_profile_name != "" ? var.workload_profile_name : null
+
+  replica_timeout_in_seconds = var.job_replica_timeout_in_seconds
+  replica_retry_limit        = var.job_replica_retry_limit
+
+  manual_trigger_config {
+    parallelism              = var.job_parallelism
+    replica_completion_count = var.job_replica_completion_count
+  }
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [var.user_assigned_identity_id]
+  }
+
+  dynamic "registry" {
+    for_each = var.registry_server != "" ? [var.registry_server] : []
+    content {
+      server   = registry.value
+      identity = var.user_assigned_identity_id
+    }
+  }
+
+  dynamic "secret" {
+    for_each = local.secrets_by_name
+    content {
+      name                = secret.value.name
+      key_vault_secret_id = secret.value.key_vault_secret_id
+      identity            = var.user_assigned_identity_id
+    }
+  }
+
+  template {
+    container {
+      name   = local.container_name
+      image  = var.image
+      cpu    = var.cpu
+      memory = var.memory
+
+      dynamic "env" {
+        for_each = { for e in local.container_env : e.name => e }
+        content {
+          name        = env.value.name
+          value       = env.value.value
+          secret_name = env.value.secret_name
+        }
       }
     }
   }

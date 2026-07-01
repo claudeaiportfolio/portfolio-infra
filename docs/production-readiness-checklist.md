@@ -65,15 +65,20 @@ CI policy gate (`.github/workflows/terraform-policy.yml`) enforces mechanically.
       identity / KV IDs are all caller-supplied variables.
 - [x] Neutral/required defaults — `image` and `user_assigned_identity_id`
       required; everything else neutral (scale-to-zero, ingress off,
-      Consumption-only).
-- [x] **Scale-to-zero** default (`min_replicas = 0`); optional KEDA
+      Consumption-only, `workload_kind = "app"`).
+- [x] **Two workload kinds** (`workload_kind`): a Container **App** or a
+      run-to-completion **Job** (manual/on-demand trigger). Episodic/batch work
+      uses the Job — a scale-to-zero App with no ingress would deploy but never
+      wake (a facade).
+- [x] **Scale-to-zero** default for the app (`min_replicas = 0`); optional KEDA
       `custom_scale_rules`.
 - [x] **VNet integration** (`infrastructure_subnet_id`) + **internal-only
       ingress** (`internal_ingress_only`) for the no-public-ingress posture;
       precondition fails fast if requested without a subnet.
 - [x] Secrets sourced from Key Vault and ACR pull auth via a caller-owned
-      **user-assigned managed identity** — no admin users / stored passwords.
-- [x] `terraform test` coverage (defaults + internal/private/registry/secrets).
+      **user-assigned managed identity** — no admin users / stored passwords —
+      for **both** the app and the job.
+- [x] `terraform test` coverage (app defaults + internal/private app + job).
 - [x] No `enable_private_endpoints` flag (ACA uses VNet+internal LB, not a PE),
       so the `anti-facade` rule correctly does not apply.
 - [ ] *Deferred (human apply):* wire `infrastructure_subnet_id` to the shared

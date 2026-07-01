@@ -46,3 +46,38 @@ module "aca" {
 
   tags = { environment = "example" }
 }
+
+# Job variant: an episodic/batch run-to-completion workload (container runs once
+# and exits) with a manual on-demand trigger — the correct primitive when there
+# is no long-running server to keep alive.
+module "aca_job" {
+  source = "../../terraform/modules/aca"
+
+  workload_kind = "job"
+
+  resource_group_name = "example-rg"
+  location            = "uksouth"
+  name_prefix         = "example-batch"
+  loc_short           = "uks"
+
+  infrastructure_subnet_id = local.aca_subnet_id
+  internal_ingress_only    = true
+
+  # Manual trigger sizing.
+  job_replica_timeout_in_seconds = 1800
+  job_replica_retry_limit        = 1
+  job_parallelism                = 1
+  job_replica_completion_count   = 1
+
+  image                     = "example.azurecr.io/example-app:latest"
+  registry_server           = "example.azurecr.io"
+  user_assigned_identity_id = local.uami_id
+
+  secrets = [
+    { name = "anthropic-api-key", key_vault_secret_id = local.kv_secret_uri },
+  ]
+  secret_env_vars = { ANTHROPIC_API_KEY = "anthropic-api-key" }
+  env_vars        = { SEC_EDGAR_USER_AGENT = "example agent (contact@example.com)" }
+
+  tags = { environment = "example" }
+}
