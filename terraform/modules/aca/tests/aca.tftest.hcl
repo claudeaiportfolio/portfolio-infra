@@ -127,3 +127,43 @@ run "job_variant_manual_trigger_with_registry_and_secrets" {
     error_message = "job env must include both plain and secret-backed variables"
   }
 }
+
+run "http_probes_opt_in_per_path" {
+  command = plan
+
+  variables {
+    liveness_probe_path  = "/healthz"
+    readiness_probe_path = "/readyz"
+    ingress_target_port  = 8080
+  }
+
+  assert {
+    condition     = azurerm_container_app.this[0].template[0].container[0].liveness_probe[0].path == "/healthz"
+    error_message = "liveness probe must use liveness_probe_path"
+  }
+  assert {
+    condition     = azurerm_container_app.this[0].template[0].container[0].liveness_probe[0].port == 8080
+    error_message = "liveness probe must target ingress_target_port"
+  }
+  assert {
+    condition     = azurerm_container_app.this[0].template[0].container[0].readiness_probe[0].path == "/readyz"
+    error_message = "readiness probe must use readiness_probe_path"
+  }
+  assert {
+    condition     = azurerm_container_app.this[0].template[0].container[0].readiness_probe[0].transport == "HTTP"
+    error_message = "readiness probe must be HTTP"
+  }
+}
+
+run "no_probes_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(azurerm_container_app.this[0].template[0].container[0].liveness_probe) == 0
+    error_message = "no liveness probe expected when liveness_probe_path is empty"
+  }
+  assert {
+    condition     = length(azurerm_container_app.this[0].template[0].container[0].readiness_probe) == 0
+    error_message = "no readiness probe expected when readiness_probe_path is empty"
+  }
+}

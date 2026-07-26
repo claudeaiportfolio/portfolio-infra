@@ -201,6 +201,28 @@ variable "secret_env_vars" {
   default     = {}
 }
 
+variable "liveness_probe_path" {
+  description = "HTTP path for the container liveness probe (e.g. '/healthz'), served on ingress_target_port. Empty => no explicit probe (ACA applies its TCP-on-port default). App workloads only — jobs run to completion and take no probes."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.liveness_probe_path == "" || startswith(var.liveness_probe_path, "/")
+    error_message = "liveness_probe_path must start with '/' when set."
+  }
+}
+
+variable "readiness_probe_path" {
+  description = "HTTP path for the container readiness probe (e.g. '/readyz'), served on ingress_target_port. Empty => no explicit probe. App workloads only."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.readiness_probe_path == "" || startswith(var.readiness_probe_path, "/")
+    error_message = "readiness_probe_path must start with '/' when set."
+  }
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

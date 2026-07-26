@@ -32,7 +32,7 @@ autoscale on load/events.
 | Resource | When | Notes |
 |----------|------|-------|
 | `azurerm_container_app_environment.this` | always | VNet-integrated when `infrastructure_subnet_id` set; internal LB when `internal_ingress_only`; Consumption-only unless `workload_profiles` given; optional Log Analytics + zone redundancy. |
-| `azurerm_container_app.this` | `workload_kind = "app"` | Single-revision app; `UserAssigned` identity; optional ACR `registry` (MI auth); KV-backed `secret` blocks (MI auth); `template` with scale-to-zero (`min_replicas` default 0) + optional `custom_scale_rule`s; optional internal/external `ingress`. |
+| `azurerm_container_app.this` | `workload_kind = "app"` | Single-revision app; `UserAssigned` identity; optional ACR `registry` (MI auth); KV-backed `secret` blocks (MI auth); `template` with scale-to-zero (`min_replicas` default 0) + optional `custom_scale_rule`s; optional HTTP `liveness_probe`/`readiness_probe` (`liveness_probe_path` / `readiness_probe_path`, served on `ingress_target_port`; empty = ACA's TCP default); optional internal/external `ingress`. |
 | `azurerm_container_app_job.this` | `workload_kind = "job"` | `manual_trigger_config` (on-demand), `replica_timeout_in_seconds` / `replica_retry_limit`; same `UserAssigned` identity + ACR `registry` + KV-backed `secret` + `env` wiring as the app, run to completion. |
 
 ## Identity, secrets & registry (managed-identity, no stored creds)

@@ -3,7 +3,22 @@
 All notable changes to the shared Terraform modules. Tags follow
 `tf-modules-vX.Y.Z`. Consumers pin to a tag and re-pin on their own clock.
 
-## tf-modules-v0.3.0 (unreleased)
+## tf-modules-v0.4.0 (2026-07-26)
+
+Additive release: optional HTTP health probes on the `aca` module's app path.
+Consumers on `tf-modules-v0.3.0` are unaffected (both new variables default to
+empty = no probe blocks, ACA's built-in TCP-on-port default applies).
+
+### Added
+
+- **`aca`**: `liveness_probe_path` / `readiness_probe_path` — opt-in per path.
+  When set (e.g. `/healthz` / `/readyz`), the app container gets an HTTP
+  `liveness_probe` / `readiness_probe` on `ingress_target_port`. Paths are
+  validated to start with `/`. App workloads only — jobs run to completion and
+  take no probes. Covered by new `aca.tftest.hcl` runs (probes present when
+  configured, absent by default).
+
+## tf-modules-v0.3.0 (2026-07-01)
 
 Additive release: new **`aca`** module (Azure Container Apps). No changes to
 existing modules — consumers on `tf-modules-v0.2.0` are unaffected and re-pin

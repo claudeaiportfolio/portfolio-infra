@@ -125,6 +125,27 @@ resource "azurerm_container_app" "this" {
           secret_name = env.value.secret_name
         }
       }
+
+      # HTTP health probes, opt-in per path (empty = ACA's built-in TCP-on-port
+      # default). Probes hit the container port directly, so ingress_target_port
+      # is the right port whether or not ingress is enabled.
+      dynamic "liveness_probe" {
+        for_each = var.liveness_probe_path != "" ? [var.liveness_probe_path] : []
+        content {
+          transport = "HTTP"
+          port      = var.ingress_target_port
+          path      = liveness_probe.value
+        }
+      }
+
+      dynamic "readiness_probe" {
+        for_each = var.readiness_probe_path != "" ? [var.readiness_probe_path] : []
+        content {
+          transport = "HTTP"
+          port      = var.ingress_target_port
+          path      = readiness_probe.value
+        }
+      }
     }
 
     dynamic "custom_scale_rule" {
